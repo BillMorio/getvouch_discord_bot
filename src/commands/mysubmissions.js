@@ -48,10 +48,10 @@ module.exports = {
       return interaction.editReply("No submissions found for that email.");
     }
 
-    const MAX_SHOWN = 5; // Discord allows max 5 action rows per message
+    const MAX_SHOWN = 10;
     const slice = data.submissions.slice(0, MAX_SHOWN);
 
-    // Header embed
+    // Reply with the header only — each submission goes in its own follow-up message
     const header = new EmbedBuilder()
       .setTitle(`\uD83D\uDCCB  Your Submissions`)
       .setDescription(
@@ -60,10 +60,9 @@ module.exports = {
       )
       .setColor(0x7c3aed);
 
-    // One embed + one action row per submission (if unverified + platform supported)
-    const embeds = [header];
-    const components = [];
+    await interaction.editReply({ embeds: [header] });
 
+    // Send each submission as its own follow-up so buttons stay with their card
     for (const sub of slice) {
       const s =
         statusDisplay[sub.status] ||
@@ -102,22 +101,25 @@ module.exports = {
         .setFooter({ text: `ID: ${sub.submission_id}` })
         .setTimestamp(new Date(sub.created_at));
 
-      embeds.push(embed);
-
-      // Add a Verify Stats button for unverified submissions on supported platforms
+      const components = [];
       const isUnverified =
         !sub.verification_status || sub.verification_status === "pending";
       if (isUnverified && DATASOURCES[sub.platform]) {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`verify_stats_${sub.submission_id}_${sub.platform}`)
-            .setLabel(`\uD83D\uDD10 Verify Stats \u2014 ${sub.platform}`)
-            .setStyle(ButtonStyle.Primary)
+        components.push(
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`verify_stats_${sub.submission_id}_${sub.platform}`)
+              .setLabel("\uD83D\uDD10 Verify Stats")
+              .setStyle(ButtonStyle.Primary)
+          )
         );
-        components.push(row);
       }
-    }
 
-    await interaction.editReply({ embeds, components });
+      await interaction.followUp({
+        embeds: [embed],
+        components,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   },
 };
