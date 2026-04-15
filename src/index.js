@@ -87,7 +87,14 @@ client.once("ready", () => {
 
 // --- Express Server (for Vouch + Lumina webhooks) ---
 const app = express();
-app.use(express.json());
+// Capture raw body bytes so webhooks can verify HMAC signatures
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.get("/health", (req, res) => res.send("OK"));
 
@@ -167,11 +174,8 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 
-app.post(
-  "/api/webhook/lumina",
-  express.raw({ type: "application/json", limit: "1mb" }),
-  async (req, res) => {
-    const rawBody = req.body.toString("utf8");
+app.post("/api/webhook/lumina", async (req, res) => {
+    const rawBody = req.rawBody ? req.rawBody.toString("utf8") : "";
     const secret = process.env.LUMINA_WEBHOOK_SECRET;
 
     if (!secret) {
@@ -221,14 +225,8 @@ app.post(
       return res.status(401).send("Bad signature");
     }
 
-    // Signature is valid — parse body
-    let payload;
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      return res.status(400).send("Bad JSON");
-    }
-
+    // Signature is valid — body is already parsed
+    const payload = req.body;
     console.log("Lumina webhook received:", payload.event || payload.type);
 
     // Dispatch by event type
@@ -242,8 +240,7 @@ app.post(
     }
 
     res.sendStatus(200);
-  }
-);
+});
 
 async function postCampaignAnnouncement(campaign) {
   const channelId = process.env.ANNOUNCEMENTS_CHANNEL_ID;
