@@ -211,6 +211,11 @@ app.post(
 
     if (!valid) {
       console.warn("Rejected Lumina webhook: HMAC mismatch");
+      console.warn("  Received v1:", v1);
+      console.warn("  Computed:   ", expected);
+      console.warn("  Secret length:", secret?.length || 0);
+      console.warn("  Raw body length:", rawBody.length);
+      console.warn("  Timestamp:", t);
       return res.status(401).send("Bad signature");
     }
 
