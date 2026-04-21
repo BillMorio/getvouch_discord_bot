@@ -44,6 +44,17 @@ async function startDmUpload(interaction, submissionId) {
     return interaction.editReply("This submission has no email on file — can't proceed.");
   }
 
+  // If the submission is already linked to a different Discord account, refuse.
+  // If it's linked to THIS user, we'll pass the ID through for extra safety.
+  // If it's unlinked (web-originated), skip the ID so the API check doesn't trip.
+  const subDiscordId = sub.discord_user_id ? String(sub.discord_user_id) : null;
+  if (subDiscordId && subDiscordId !== interaction.user.id) {
+    return interaction.editReply(
+      "This submission is linked to a different Discord account and can't be uploaded from here."
+    );
+  }
+  const passDiscordId = subDiscordId === interaction.user.id;
+
   let dm;
   try {
     dm = await interaction.user.createDM();
@@ -66,7 +77,12 @@ async function startDmUpload(interaction, submissionId) {
   const userId = interaction.user.id;
   cancelPending(userId);
 
-  const entry = { submissionId: String(submissionId), email, startedAt: Date.now() };
+  const entry = {
+    submissionId: String(submissionId),
+    email,
+    passDiscordId,
+    startedAt: Date.now(),
+  };
   entry.timer = setTimeout(() => {
     const current = pending.get(userId);
     if (current?.startedAt === entry.startedAt) pending.delete(userId);
@@ -129,7 +145,7 @@ async function handleDmMessage(message) {
       buffer,
       attachment.name || "proof.mp4",
       mime,
-      userId
+      entry.passDiscordId ? userId : undefined
     );
 
     const embed = new EmbedBuilder()

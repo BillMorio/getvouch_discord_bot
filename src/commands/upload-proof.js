@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
-const { uploadVerification } = require("../api");
+const { uploadVerification, getSubmissionStatus } = require("../api");
 
 const ALLOWED_MIMES = ["video/mp4", "video/quicktime", "video/webm", "video/x-quicktime"];
 const MAX_SIZE = 100 * 1024 * 1024;
@@ -38,6 +38,24 @@ module.exports = {
       );
     }
 
+    // Only pass discord_user_id if the submission already has one that matches
+    // this user — otherwise the API's defence-in-depth check will 403 on
+    // web-originated submissions (which have a null discord_user_id).
+    let passDiscordId = false;
+    try {
+      const sub = await getSubmissionStatus(submissionId);
+      const subDiscordId = sub.discord_user_id ? String(sub.discord_user_id) : null;
+      if (subDiscordId && subDiscordId !== interaction.user.id) {
+        return interaction.editReply(
+          "This submission is linked to a different Discord account and can't be uploaded from here."
+        );
+      }
+      passDiscordId = subDiscordId === interaction.user.id;
+    } catch (err) {
+      console.error("getSubmissionStatus error:", err);
+      return interaction.editReply("Couldn't load this submission. Check the ID and try again.");
+    }
+
     let buffer;
     try {
       const res = await fetch(attachment.url);
@@ -57,7 +75,7 @@ module.exports = {
         buffer,
         attachment.name || "proof.mp4",
         mime,
-        interaction.user.id
+        passDiscordId ? interaction.user.id : undefined
       );
     } catch (err) {
       console.error("uploadVerification error:", err);
