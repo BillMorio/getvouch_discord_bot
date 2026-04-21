@@ -74,6 +74,20 @@ async function setPaymentMethod(email, body) {
   return data;
 }
 
+async function listUserSubmissions(discordUserId, { limit, offset, status } = {}) {
+  const qs = new URLSearchParams();
+  if (limit) qs.set("limit", String(limit));
+  if (offset) qs.set("offset", String(offset));
+  if (status) qs.set("status", status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const r = await fetch(
+    `${BASE_URL}/api/discord/user/${encodeURIComponent(discordUserId)}/submissions${suffix}`
+  );
+  if (r.status === 404) return { total: 0, submissions: [] };
+  if (!r.ok) throw new Error(`listUserSubmissions ${r.status}`);
+  return r.json();
+}
+
 async function claimPayment(submissionId, clipperEmail) {
   const r = await fetch(`${BASE_URL}/api/discord/submission/${submissionId}/claim-payment`, {
     method: "POST",
@@ -96,5 +110,6 @@ module.exports = {
   listPublicCampaigns,
   getPaymentMethod,
   setPaymentMethod,
+  listUserSubmissions,
   claimPayment,
 };
