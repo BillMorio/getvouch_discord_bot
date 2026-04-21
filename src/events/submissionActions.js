@@ -28,7 +28,7 @@ async function handleUploadProofButton(interaction) {
     .setDescription(
       `Almost there — one step to claim payment for **submission #${submissionId}**.\n\n` +
         `**Run this command with your video attached:**\n` +
-        `\`\`\`\n/upload-proof submission_id:${submissionId} video:<attach>\n\`\`\``
+        `\`\`\`\n/upload-proof submission_id:${submissionId} email:<your email> video:<attach>\n\`\`\``
     )
     .addFields(
       { name: "📦 Formats", value: "`mp4` · `mov` · `webm`", inline: true },

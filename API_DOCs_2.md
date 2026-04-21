@@ -157,19 +157,44 @@ For follow-up "check status" commands AND for rendering state-driven action butt
 - `status == paid` → show disabled **Paid**
 - `status == rejected || verification_status == rejected` → show disabled **Rejected** with `rejection_reason`
 
-### 4.6 Upload verification video
-`POST /api/submissions/{submission_id}/upload-verification?token={submission_token}`
+### 4.6 Upload verification video (recommended — email auth)
+`POST /api/discord/submission/{submission_id}/upload-verification`
 
-**Request:** `multipart/form-data` with field `video` (mp4/quicktime/webm, max 100 MB).
+**Use this from the Discord bot.** Auth is by `clipper_email` so the bot never has to persist submission tokens across restarts.
 
-**Auth:** query param `token` must match the submission's `submission_token`.
+**Request:** `multipart/form-data`
 
-**Response**
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `video` | file | yes | mp4 / quicktime / webm, max 100 MB |
+| `clipper_email` | string | yes | Must match `submission.clipper_email` (case-insensitive) |
+| `discord_user_id` | string | no | If sent, must also match `submission.discord_user_id` (defence in depth) |
+
+**Response 200**
 ```json
-{ "status": "uploaded", "message": "Verification video uploaded successfully" }
+{
+  "ok": true,
+  "submission_id": 184,
+  "verification_status": "uploaded",
+  "message": "Verification video uploaded successfully"
+}
 ```
 
-**How to get the `submission_token`:** `POST /api/discord/submit` returns it in the response. Store it on the bot side against the `submission_id` (e.g. in your local SQLite) so you can re-use it later if the clipper comes back and says "I want to upload proof for submission #4821".
+**Errors**
+| Code | Body | Meaning |
+|---|---|---|
+| 400 | `{ "detail": "Invalid email" }` | Malformed email |
+| 400 | `{ "detail": "Missing video" }` | No file attached |
+| 400 | `{ "detail": "Unsupported video type '...'. Allowed: mp4, quicktime, webm" }` | Wrong MIME |
+| 403 | `{ "detail": "Email does not match submission" }` | Ownership check failed |
+| 403 | `{ "detail": "Discord user does not match submission" }` | Optional `discord_user_id` didn't match |
+| 404 | `{ "detail": "Submission not found" }` | |
+| 413 | `{ "detail": "File too large" }` | > 100 MB |
+
+### 4.6b Upload verification video (legacy — token auth)
+`POST /api/submissions/{submission_id}/upload-verification?token={submission_token}`
+
+Original endpoint, kept for the web app. Same multipart shape (just `video`). Response: `{ "status": "uploaded", "message": "..." }`. Prefer §4.6 for the bot.
 
 ### 4.7 Check verification status
 `GET /api/submissions/{submission_id}/verification-status?token={submission_token}`
@@ -248,6 +273,65 @@ Auto-creates the clipper record if new. Exactly one method per clipper.
 | 404 | Submission not found |
 
 ---
+### 4.12 List a clipper's submissions (by email)
+`GET /api/discord/clipper/{email}/submissions`
+
+For `/mysubmissions` — paginated list, newest first. Each row has the same shape as `GET /api/discord/submission/{id}` so the bot reuses one card renderer.
+
+**Query params**
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `limit` | int | 10 | Max 25 |
+| `offset` | int | 0 | For pagination |
+| `status` | string | — | Filter by `submitted` / `payment_claimed` / `paid` / `rejected` |
+
+**Response**
+```json
+{
+  "email": "clipper@example.com",
+  "total": 12,
+  "limit": 10,
+  "offset": 0,
+  "submissions": [
+    {
+      "id": 4821,
+      "campaign_id": 17,
+      "post_url": "https://www.tiktok.com/@user/video/123",
+      "platform": "tiktok",
+      "views": 12050,
+      "likes": 430,
+      "comments": 21,
+      "est_earnings": 3.61,
+      "status": "submitted",
+      "scrape_status": "ok",
+      "verification_status": "pending",
+      "has_video": false,
+      "rejection_reason": "",
+      "clipper_email": "clipper@example.com",
+      "discord_user_id": "123456789012345678",
+      "created_at": "2026-04-19T14:22:11"
+    }
+  ]
+}
+```
+
+**Errors**
+- `400` — `{ "detail": "Invalid email" }` or invalid `status` value
+- `404` — `{ "detail": "Clipper not found" }`
+
+### 4.13 List a clipper's submissions (by Discord user ID)
+`GET /api/discord/user/{discord_user_id}/submissions`
+
+Identical to §4.12 but keyed off Discord user ID — use this for `/mysubmissions` so clippers don't have to type their email. Pull the ID from `interaction.user.id`.
+
+**Same query params** (`limit`, `offset`, `status`).
+
+**Response** — same shape as §4.12 plus `discord_user_id` at the top and the resolved `email` of the owner.
+
+**Errors**
+- `400` — `{ "detail": "Invalid discord_user_id" }` (must be digits)
+- `404` — `{ "detail": "No submissions for this Discord user" }`
+
 
 ## 5. Suggested Bot UX
 
@@ -288,7 +372,7 @@ Every submission embed should show exactly one primary action button, derived fr
 
 | Condition | Button | Action |
 |---|---|---|
-| `has_video == false` | 📹 **Upload Video Proof** | Prompt user to attach a video → POST `/api/submissions/{id}/upload-verification?token=...` |
+| `has_video == false` | 📹 **Upload Video Proof** | Prompt user to attach a video → POST `/api/discord/submission/{id}/upload-verification` with `clipper_email` |
 | `has_video && verification_status ∈ (uploaded, verified)` && `status == submitted` | 💰 **Claim Payment** | Check `§4.9` payment method → if missing, open method-setup modal (§4.10) → then POST `§4.11` |
 | `status == payment_claimed` | ⏳ **Payment Pending** (disabled) | Tooltip: "Payment has been claimed and is awaiting processing" |
 | `status == paid` | ✅ **Paid** (disabled) | Tooltip: "You've been paid for this submission" |
@@ -403,6 +487,36 @@ export async function setPaymentMethod(email: string, body: {
   return r.json();
 }
 
+export async function listClipperSubmissions(
+  email: string,
+  opts: { limit?: number; offset?: number; status?: string } = {}
+) {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  if (opts.offset) qs.set("offset", String(opts.offset));
+  if (opts.status) qs.set("status", opts.status);
+  const r = await fetch(
+    `${BASE}/api/discord/clipper/${encodeURIComponent(email)}/submissions?${qs}`
+  );
+  if (!r.ok) throw new Error(`listClipperSubmissions ${r.status}`);
+  return r.json(); // { email, total, limit, offset, submissions: [...] }
+}
+
+export async function listUserSubmissions(
+  discordUserId: string,
+  opts: { limit?: number; offset?: number; status?: string } = {}
+) {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  if (opts.offset) qs.set("offset", String(opts.offset));
+  if (opts.status) qs.set("status", opts.status);
+  const r = await fetch(
+    `${BASE}/api/discord/user/${encodeURIComponent(discordUserId)}/submissions?${qs}`
+  );
+  if (!r.ok) throw new Error(`listUserSubmissions ${r.status}`);
+  return r.json();
+}
+
 export async function claimPayment(submissionId: number, clipperEmail: string) {
   const r = await fetch(`${BASE}/api/discord/submission/${submissionId}/claim-payment`, {
     method: "POST",
@@ -414,18 +528,21 @@ export async function claimPayment(submissionId: number, clipperEmail: string) {
 
 export async function uploadVerification(
   submissionId: number,
-  submissionToken: string,
+  clipperEmail: string,
   file: Buffer,
   filename: string,
-  mime: string
+  mime: string,
+  discordUserId?: string,
 ) {
   const form = new FormData();
   form.append("video", new Blob([file], { type: mime }), filename);
+  form.append("clipper_email", clipperEmail);
+  if (discordUserId) form.append("discord_user_id", discordUserId);
   const r = await fetch(
-    `${BASE}/api/submissions/${submissionId}/upload-verification?token=${submissionToken}`,
+    `${BASE}/api/discord/submission/${submissionId}/upload-verification`,
     { method: "POST", body: form }
   );
-  return r.json();
+  return r.json(); // { ok, submission_id, verification_status, message } or { detail }
 }
 ```
 

@@ -1,9 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { uploadVerification } = require("../api");
-const { lookupToken } = require("../state");
 
 const ALLOWED_MIMES = ["video/mp4", "video/quicktime", "video/webm", "video/x-quicktime"];
-const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
+const MAX_SIZE = 100 * 1024 * 1024;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,33 +11,24 @@ module.exports = {
     .addIntegerOption((opt) =>
       opt.setName("submission_id").setDescription("Submission ID").setRequired(true)
     )
+    .addStringOption((opt) =>
+      opt.setName("email").setDescription("Your clipper email").setRequired(true)
+    )
     .addAttachmentOption((opt) =>
       opt.setName("video").setDescription("mp4 / mov / webm, max 100 MB").setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("token")
-        .setDescription("Submission token (only if the bot doesn't remember it)")
-        .setRequired(false)
     ),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const submissionId = interaction.options.getInteger("submission_id");
+    const email = interaction.options.getString("email").trim();
     const attachment = interaction.options.getAttachment("video");
-    const providedToken = interaction.options.getString("token");
-    const token = providedToken || lookupToken(submissionId);
-
-    if (!token) {
-      return interaction.editReply(
-        "I don't have a token for this submission (bot may have restarted). " +
-          "Please re-run with `token:` option — you can find it in the submit response."
-      );
-    }
 
     if (attachment.size > MAX_SIZE) {
-      return interaction.editReply(`File too large (${Math.round(attachment.size / 1024 / 1024)} MB). Max is 100 MB.`);
+      return interaction.editReply(
+        `File too large (${Math.round(attachment.size / 1024 / 1024)} MB). Max is 100 MB.`
+      );
     }
 
     const mime = attachment.contentType || "";
@@ -48,7 +38,6 @@ module.exports = {
       );
     }
 
-    // Download the file from Discord's CDN then forward to Lumina
     let buffer;
     try {
       const res = await fetch(attachment.url);
@@ -64,16 +53,15 @@ module.exports = {
     try {
       result = await uploadVerification(
         submissionId,
-        token,
+        email,
         buffer,
         attachment.name || "proof.mp4",
-        mime
+        mime,
+        interaction.user.id
       );
     } catch (err) {
       console.error("uploadVerification error:", err);
-      return interaction.editReply(
-        `Upload failed: ${err.message.slice(0, 200)}`
-      );
+      return interaction.editReply(`Upload failed: ${err.message.slice(0, 200)}`);
     }
 
     const embed = new EmbedBuilder()

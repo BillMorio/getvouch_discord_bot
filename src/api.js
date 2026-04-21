@@ -41,13 +41,15 @@ async function getVerificationStatus(submissionId, token) {
   return r.json();
 }
 
-async function uploadVerification(submissionId, submissionToken, fileBuffer, filename, mime) {
+async function uploadVerification(submissionId, clipperEmail, fileBuffer, filename, mime, discordUserId) {
   const form = new FormData();
   form.append("video", new Blob([fileBuffer], { type: mime }), filename);
-  const url = `${BASE_URL}/api/submissions/${submissionId}/upload-verification?token=${encodeURIComponent(submissionToken)}`;
+  form.append("clipper_email", clipperEmail);
+  if (discordUserId) form.append("discord_user_id", discordUserId);
+  const url = `${BASE_URL}/api/discord/submission/${submissionId}/upload-verification`;
   const r = await fetch(url, { method: "POST", body: form });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`uploadVerification ${r.status}: ${JSON.stringify(data)}`);
+  if (!r.ok) throw new Error(data.detail || `uploadVerification ${r.status}`);
   return data;
 }
 

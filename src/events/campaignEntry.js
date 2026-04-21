@@ -6,7 +6,6 @@ const {
   MessageFlags,
 } = require("discord.js");
 const { submitClip, getSubmissionStatus } = require("../api");
-const { rememberToken } = require("../state");
 const { buildSubmissionCard } = require("../lib/submissionCard");
 
 // "Enter Campaign" button → modal with URL + email
@@ -68,8 +67,6 @@ async function handleModalSubmit(interaction) {
   if (result.status !== "ok") {
     return interaction.editReply(`❌ Submission failed: ${result.detail || "Unknown error"}`);
   }
-
-  rememberToken(result.submission_id, result.submission_token);
 
   // Fetch full submission state so we can render the stateful card
   let submission;
