@@ -25,15 +25,35 @@ for (const file of fs.readdirSync(commandsPath).filter((f) => f.endsWith(".js"))
 }
 
 const campaignEntry = require("./events/campaignEntry");
+const submissionActions = require("./events/submissionActions");
 
 client.on("interactionCreate", async (interaction) => {
   try {
     if (interaction.isButton()) {
+      // Submission-card action buttons handled first
+      const id = interaction.customId;
+      if (
+        id.startsWith("upload_proof_") ||
+        id.startsWith("claim_payment_") ||
+        id.startsWith("set_method_") ||
+        id.startsWith("noop_")
+      ) {
+        if (id.startsWith("noop_")) {
+          await interaction.deferUpdate().catch(() => {});
+          return;
+        }
+        await submissionActions.handleButton(interaction);
+        return;
+      }
       await campaignEntry.handleButton(interaction);
       return;
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith("set_method_modal_")) {
+        await submissionActions.handleModalSubmit(interaction);
+        return;
+      }
       await campaignEntry.handleModalSubmit(interaction);
       return;
     }

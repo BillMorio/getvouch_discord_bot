@@ -126,7 +126,36 @@ For a `/me` or `/stats` slash command.
 ### 4.5 Get submission status
 `GET /api/discord/submission/{submission_id}`
 
-For follow-up "check status" commands. Returns views, likes, comments, earnings, status.
+For follow-up "check status" commands AND for rendering state-driven action buttons.
+
+**Response**
+```json
+{
+  "id": 4821,
+  "post_url": "https://www.tiktok.com/@user/video/7312…",
+  "platform": "tiktok",
+  "views": 14532,
+  "likes": 302,
+  "comments": 18,
+  "est_earnings": 21.80,
+  "status": "submitted",                  // submitted | payment_claimed | paid | rejected
+  "scrape_status": "ok",                  // pending | ok | failed
+  "verification_status": "pending",       // pending | uploaded | verified | rejected
+  "has_video": false,
+  "rejection_reason": "",                 // populated only when verification_status == rejected
+  "clipper_email": "user@example.com",
+  "campaign_id": 16,
+  "discord_user_id": "123456789012345678",
+  "created_at": "2026-04-20T12:34:56"
+}
+```
+
+**Use for stateful buttons** (see §5.7):
+- `has_video == false` → show **Upload Video Proof**
+- `has_video && verification_status in (uploaded, verified)` → show **Claim Payment**
+- `status == payment_claimed` → show disabled **Payment Pending**
+- `status == paid` → show disabled **Paid**
+- `status == rejected || verification_status == rejected` → show disabled **Rejected** with `rejection_reason`
 
 ### 4.6 Upload verification video
 `POST /api/submissions/{submission_id}/upload-verification?token={submission_token}`
@@ -156,6 +185,67 @@ For follow-up "check status" commands. Returns views, likes, comments, earnings,
 Use this for a `/campaigns` command that shows both live AND completed campaigns. The `/api/discord/campaigns` endpoint only returns open ones.
 
 **Response** — same shape as Discord campaigns plus `status: "open" | "closed" | "completed"` and `client_name`.
+
+### 4.9 Get clipper payment method
+`GET /api/discord/clipper/{email}/payment-method`
+
+Before showing **Claim Payment**, check whether the clipper has a payment method set.
+
+**Response**
+```json
+{
+  "method": "paypal",                       // "whop" | "paypal" | "solana" | null
+  "details": { "paypal_email": "user@example.com" },
+  "has_method": true
+}
+```
+
+Returns `{ method: null, details: null, has_method: false }` if the clipper doesn't exist or has no method set.
+
+### 4.10 Set / update clipper payment method
+`POST /api/discord/clipper/{email}/payment-method`
+
+Auto-creates the clipper record if new. Exactly one method per clipper.
+
+**Body** (only the relevant field for the chosen method is required)
+```json
+{
+  "method": "paypal",                       // "whop" | "paypal" | "solana"
+  "paypal_email": "user@example.com",       // for method=paypal
+  "whop_username": "",                      // for method=whop
+  "solana_address": "",                     // for method=solana
+  "discord_user_id": "123456789012345678"
+}
+```
+
+**Response**
+```json
+{ "ok": true, "method": "paypal" }
+```
+
+**Errors**: 400 if the method is invalid or the matching credential field is empty.
+
+### 4.11 Claim payment for a submission
+`POST /api/discord/submission/{submission_id}/claim-payment`
+
+**Body**
+```json
+{ "clipper_email": "user@example.com" }
+```
+
+**Response**
+```json
+{ "ok": true, "submission_id": 4821, "status": "payment_claimed" }
+```
+
+**Errors**
+| Code | Meaning |
+|---|---|
+| 403 | Submission doesn't belong to this email |
+| 400 | Already paid / already claimed |
+| 400 | Proof must be verified before claiming |
+| 400 | No payment method set (prompt the user to run §4.10 first) |
+| 404 | Submission not found |
 
 ---
 
@@ -192,6 +282,29 @@ When an admin runs `/post-campaign <id>` in a channel, the bot:
 
 ### 5.6 Local email-to-Discord cache
 Keep a tiny SQLite table in the bot: `discord_user_id → email` so the user only enters their email once. When they run any command, read email from cache.
+
+### 5.7 Stateful submission-card buttons
+Every submission embed should show exactly one primary action button, derived from `GET /api/discord/submission/{id}`:
+
+| Condition | Button | Action |
+|---|---|---|
+| `has_video == false` | 📹 **Upload Video Proof** | Prompt user to attach a video → POST `/api/submissions/{id}/upload-verification?token=...` |
+| `has_video && verification_status ∈ (uploaded, verified)` && `status == submitted` | 💰 **Claim Payment** | Check `§4.9` payment method → if missing, open method-setup modal (§4.10) → then POST `§4.11` |
+| `status == payment_claimed` | ⏳ **Payment Pending** (disabled) | Tooltip: "Payment has been claimed and is awaiting processing" |
+| `status == paid` | ✅ **Paid** (disabled) | Tooltip: "You've been paid for this submission" |
+| `verification_status == rejected` | ❌ **Rejected** (disabled) | Show `rejection_reason` |
+
+Refresh the card by re-calling `GET /api/discord/submission/{id}` after any state-changing action.
+
+### 5.8 Payment-method setup flow
+When a clipper clicks **Claim Payment** and `has_method == false`:
+1. Open a modal with a dropdown: **Payment Method** → Whop / PayPal / Solana
+2. Show the one relevant text field based on selection:
+   - Whop → `Whop username`
+   - PayPal → `PayPal email`
+   - Solana → `Solana wallet address`
+3. On submit, call `§4.10` `POST /api/discord/clipper/{email}/payment-method`
+4. On success, immediately retry the `§4.11` `claim-payment` call
 
 ---
 
@@ -267,6 +380,36 @@ export async function getSubmissionStatus(id: number) {
   const r = await fetch(`${BASE}/api/discord/submission/${id}`);
   if (!r.ok) throw new Error(`getSubmissionStatus ${r.status}`);
   return r.json();
+}
+
+export async function getPaymentMethod(email: string) {
+  const r = await fetch(`${BASE}/api/discord/clipper/${encodeURIComponent(email)}/payment-method`);
+  if (!r.ok) throw new Error(`getPaymentMethod ${r.status}`);
+  return r.json(); // { method, details, has_method }
+}
+
+export async function setPaymentMethod(email: string, body: {
+  method: "whop" | "paypal" | "solana";
+  whop_username?: string;
+  paypal_email?: string;
+  solana_address?: string;
+  discord_user_id?: string;
+}) {
+  const r = await fetch(`${BASE}/api/discord/clipper/${encodeURIComponent(email)}/payment-method`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+export async function claimPayment(submissionId: number, clipperEmail: string) {
+  const r = await fetch(`${BASE}/api/discord/submission/${submissionId}/claim-payment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clipper_email: clipperEmail }),
+  });
+  return r.json(); // { ok, submission_id, status } or { detail }
 }
 
 export async function uploadVerification(

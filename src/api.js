@@ -57,6 +57,33 @@ async function listPublicCampaigns() {
   return r.json();
 }
 
+async function getPaymentMethod(email) {
+  const r = await fetch(`${BASE_URL}/api/discord/clipper/${encodeURIComponent(email)}/payment-method`);
+  if (!r.ok) throw new Error(`getPaymentMethod ${r.status}`);
+  return r.json();
+}
+
+async function setPaymentMethod(email, body) {
+  const r = await fetch(`${BASE_URL}/api/discord/clipper/${encodeURIComponent(email)}/payment-method`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`setPaymentMethod ${r.status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+async function claimPayment(submissionId, clipperEmail) {
+  const r = await fetch(`${BASE_URL}/api/discord/submission/${submissionId}/claim-payment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clipper_email: clipperEmail }),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, data };
+}
+
 module.exports = {
   BASE_URL,
   listCampaigns,
@@ -67,4 +94,7 @@ module.exports = {
   getVerificationStatus,
   uploadVerification,
   listPublicCampaigns,
+  getPaymentMethod,
+  setPaymentMethod,
+  claimPayment,
 };

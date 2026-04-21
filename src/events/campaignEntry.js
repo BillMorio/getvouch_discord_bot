@@ -3,11 +3,11 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
-  EmbedBuilder,
   MessageFlags,
 } = require("discord.js");
-const { submitClip } = require("../api");
+const { submitClip, getSubmissionStatus } = require("../api");
 const { rememberToken } = require("../state");
+const { buildSubmissionCard } = require("../lib/submissionCard");
 
 // "Enter Campaign" button → modal with URL + email
 async function handleButton(interaction) {
@@ -71,22 +71,27 @@ async function handleModalSubmit(interaction) {
 
   rememberToken(result.submission_id, result.submission_token);
 
-  const embed = new EmbedBuilder()
-    .setTitle("✅  Submission Received")
-    .setDescription(
-      `${result.detail || "Submission recorded — stats will appear shortly."}\n\n` +
-        `**Next step:** upload a screen recording proving your stats.\n` +
-        `Run \`/upload-proof submission_id:${result.submission_id}\` and attach your video.`
-    )
-    .setColor(0x00c853)
-    .addFields(
-      { name: "Submission ID", value: `\`${result.submission_id}\``, inline: true },
-      { name: "Campaign", value: `\`#${campaignId}\``, inline: true }
-    )
-    .setFooter({ text: "Save this submission ID — you'll need it for the proof upload." })
-    .setTimestamp();
+  // Fetch full submission state so we can render the stateful card
+  let submission;
+  try {
+    submission = await getSubmissionStatus(result.submission_id);
+  } catch (err) {
+    // Fallback: render a minimal card from what we have
+    submission = {
+      id: result.submission_id,
+      post_url: postUrl,
+      platform: result.platform || "unknown",
+      status: "submitted",
+      verification_status: "pending",
+      has_video: false,
+      clipper_email: clipperEmail,
+      campaign_id: campaignId,
+      created_at: new Date().toISOString(),
+    };
+  }
 
-  await interaction.editReply({ embeds: [embed] });
+  const card = buildSubmissionCard(submission);
+  await interaction.editReply(card);
   return true;
 }
 
