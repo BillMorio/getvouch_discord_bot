@@ -1,7 +1,5 @@
 const BASE_URL =
-  process.env.LUMINA_API_URL ||
-  process.env.API_BASE_URL ||
-  "https://lumina-clippers-api.onrender.com";
+  process.env.LUMINA_API_URL || "https://lumina-clippers-api.onrender.com";
 
 async function listCampaigns() {
   const r = await fetch(`${BASE_URL}/api/discord/campaigns`);
