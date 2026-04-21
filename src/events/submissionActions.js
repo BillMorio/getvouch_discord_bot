@@ -21,11 +21,29 @@ const { buildSubmissionCard } = require("../lib/submissionCard");
 // upload_proof_<id>
 async function handleUploadProofButton(interaction) {
   const submissionId = interaction.customId.replace("upload_proof_", "");
+
+  const embed = new EmbedBuilder()
+    .setTitle("📹 Upload Your Proof Video")
+    .setColor(0x5865f2)
+    .setDescription(
+      `Almost there — one step to claim payment for **submission #${submissionId}**.\n\n` +
+        `**Run this command with your video attached:**\n` +
+        `\`\`\`\n/upload-proof submission_id:${submissionId} video:<attach>\n\`\`\``
+    )
+    .addFields(
+      { name: "📦 Formats", value: "`mp4` · `mov` · `webm`", inline: true },
+      { name: "📏 Max size", value: "100 MB", inline: true },
+      {
+        name: "🎬 What to record",
+        value:
+          "A screen recording showing your clip's analytics + geo breakdown on the platform.",
+        inline: false,
+      }
+    )
+    .setFooter({ text: `Submission #${submissionId}` });
+
   await interaction.reply({
-    content:
-      `📹 To upload your proof video, run:\n\n` +
-      `\`/upload-proof submission_id:${submissionId} video:<attach your file>\`\n\n` +
-      `Supported: mp4, mov, webm — up to 100 MB.`,
+    embeds: [embed],
     flags: MessageFlags.Ephemeral,
   });
 }
