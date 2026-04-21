@@ -50,7 +50,7 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith("set_method_modal_")) {
+      if (interaction.customId.startsWith("set_method_")) {
         await submissionActions.handleModalSubmit(interaction);
         return;
       }

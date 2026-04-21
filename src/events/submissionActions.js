@@ -215,12 +215,83 @@ async function handleSetMethodModal(interaction) {
   return doClaim(interaction, submissionId, email);
 }
 
+// --- Standalone /set-payment flow (no submission, no claim) ---------------
+
+const METHOD_FIELD_LABEL = {
+  paypal: "Your PayPal email",
+  whop: "Your Whop username",
+  solana: "Your Solana wallet address",
+};
+const METHOD_PLACEHOLDER = {
+  paypal: "you@example.com",
+  whop: "@yourhandle",
+  solana: "5xxxx...",
+};
+
+function buildCredentialModal(customId, method) {
+  const modal = new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(`Set ${method.charAt(0).toUpperCase() + method.slice(1)}`);
+  const input = new TextInputBuilder()
+    .setCustomId("credential")
+    .setLabel(METHOD_FIELD_LABEL[method])
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder(METHOD_PLACEHOLDER[method])
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(input));
+  return modal;
+}
+
+// set_method_only_<method>_<email>  — opens credential modal (no claim follow-up)
+async function handleSetMethodOnlyButton(interaction) {
+  const match = interaction.customId.match(/^set_method_only_(paypal|whop|solana)_(.+)$/);
+  if (!match) return;
+  const [, method, email] = match;
+  await interaction.showModal(
+    buildCredentialModal(`set_method_only_modal_${method}_${email}`, method)
+  );
+}
+
+// set_method_only_modal_<method>_<email>  — saves then confirms, no claim attempt
+async function handleSetMethodOnlyModal(interaction) {
+  const match = interaction.customId.match(/^set_method_only_modal_(paypal|whop|solana)_(.+)$/);
+  if (!match) return;
+  const [, method, email] = match;
+  const credential = interaction.fields.getTextInputValue("credential").trim();
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const body = { method, discord_user_id: interaction.user.id };
+  if (method === "paypal") body.paypal_email = credential;
+  if (method === "whop") body.whop_username = credential;
+  if (method === "solana") body.solana_address = credential;
+
+  try {
+    await setPaymentMethod(email, body);
+  } catch (err) {
+    console.error("setPaymentMethod error:", err);
+    return interaction.editReply(`Couldn't save your ${method} info. ${err.message.slice(0, 150)}`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("✅ Payment Method Saved")
+    .setColor(0x00c853)
+    .setDescription(
+      `Your payment method is now **${method.charAt(0).toUpperCase() + method.slice(1)}**.\n` +
+        `\`${credential}\``
+    )
+    .setFooter({ text: email });
+
+  await interaction.editReply({ embeds: [embed], components: [] });
+}
+
 // --- Dispatcher (called from index.js) ------------------------------------
 
 async function handleButton(interaction) {
   const id = interaction.customId;
   if (id.startsWith("upload_proof_")) return handleUploadProofButton(interaction);
   if (id.startsWith("claim_payment_")) return handleClaimPaymentButton(interaction);
+  if (id.startsWith("set_method_only_")) return handleSetMethodOnlyButton(interaction);
   if (id.startsWith("set_method_") && !id.startsWith("set_method_modal_"))
     return handleSetMethodButton(interaction);
   return false;
@@ -228,8 +299,9 @@ async function handleButton(interaction) {
 
 async function handleModalSubmit(interaction) {
   const id = interaction.customId;
+  if (id.startsWith("set_method_only_modal_")) return handleSetMethodOnlyModal(interaction);
   if (id.startsWith("set_method_modal_")) return handleSetMethodModal(interaction);
   return false;
 }
 
-module.exports = { handleButton, handleModalSubmit };
+module.exports = { handleButton, handleModalSubmit, buildCredentialModal };
