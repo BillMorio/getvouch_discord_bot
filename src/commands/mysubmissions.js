@@ -1,11 +1,14 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { listUserSubmissions, listClipperSubmissions } = require("../api");
+const { listClipperSubmissions } = require("../api");
 const { buildSubmissionCard } = require("../lib/submissionCard");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("mysubmissions")
-    .setDescription("List your recent submissions with their current status")
+    .setDescription("List your submissions")
+    .addStringOption((opt) =>
+      opt.setName("email").setDescription("Your clipper email").setRequired(true)
+    )
     .addStringOption((opt) =>
       opt
         .setName("status")
@@ -21,41 +24,22 @@ module.exports = {
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const email = interaction.options.getString("email").trim();
     const status = interaction.options.getString("status") || undefined;
 
-    // Resolve this Discord user's email via their bot-linked submissions.
-    // This gates access — only someone who's submitted at least once through
-    // the bot (and so proved their email) can see that email's full list.
-    let idResult;
-    try {
-      idResult = await listUserSubmissions(interaction.user.id, { limit: 1 });
-    } catch (err) {
-      console.error("listUserSubmissions error:", err);
-      return interaction.editReply("Couldn't load your submissions. Try again.");
-    }
-
-    const email = idResult.email || idResult.submissions?.[0]?.clipper_email;
-    if (!email) {
-      return interaction.editReply(
-        "You haven't submitted anything via Discord yet. Enter a campaign through the bot once, then this will show all submissions linked to your email."
-      );
-    }
-
-    // Email-keyed lookup returns everything on the clipper's account,
-    // including submissions made via the web dashboard.
     let result;
     try {
       result = await listClipperSubmissions(email, { limit: 10, status });
     } catch (err) {
       console.error("listClipperSubmissions error:", err);
-      return interaction.editReply("Couldn't load your submissions. Try again.");
+      return interaction.editReply("Couldn't load submissions. Check the email and try again.");
     }
 
     const submissions = result.submissions || [];
     if (submissions.length === 0) {
       const msg = status
-        ? `You have no submissions with status \`${status}\`.`
-        : "You have no submissions yet. Enter a campaign to get started!";
+        ? `No submissions with status \`${status}\` for that email.`
+        : "No submissions found for that email.";
       return interaction.editReply(msg);
     }
 
