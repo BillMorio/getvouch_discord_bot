@@ -38,11 +38,8 @@ function pickPrimaryAction(sub) {
   if (!has_video) {
     return { label: "📹 Upload Video Proof to Claim Payment", style: ButtonStyle.Primary, customId: `upload_proof_${id}` };
   }
-  // Has video + verification uploaded/verified + status still submitted
-  if (vStatus === "uploaded" || vStatus === "verified") {
-    return { label: "💰 Claim Payment", style: ButtonStyle.Success, customId: `claim_payment_${id}` };
-  }
-  return null;
+  // Any verification_status is fine once a proof video exists — admin verifies later.
+  return { label: "💰 Claim Payment", style: ButtonStyle.Success, customId: `claim_payment_${id}` };
 }
 
 function buildSubmissionCard(sub) {

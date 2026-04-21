@@ -268,7 +268,7 @@ Auto-creates the clipper record if new. Exactly one method per clipper.
 |---|---|
 | 403 | Submission doesn't belong to this email |
 | 400 | Already paid / already claimed |
-| 400 | Proof must be verified before claiming |
+| 400 | Upload a proof video before claiming payment (admin verifies it later) |
 | 400 | No payment method set (prompt the user to run §4.10 first) |
 | 404 | Submission not found |
 
@@ -373,7 +373,7 @@ Every submission embed should show exactly one primary action button, derived fr
 | Condition | Button | Action |
 |---|---|---|
 | `has_video == false` | 📹 **Upload Video Proof** | Prompt user to attach a video → POST `/api/discord/submission/{id}/upload-verification` with `clipper_email` |
-| `has_video && verification_status ∈ (uploaded, verified)` && `status == submitted` | 💰 **Claim Payment** | Check `§4.9` payment method → if missing, open method-setup modal (§4.10) → then POST `§4.11` |
+| `has_video && status == submitted` | 💰 **Claim Payment** | Check `§4.9` payment method → if missing, open method-setup modal (§4.10) → then POST `§4.11` (`verification_status` can be `pending`, `uploaded`, or `verified` — admin verifies later) |
 | `status == payment_claimed` | ⏳ **Payment Pending** (disabled) | Tooltip: "Payment has been claimed and is awaiting processing" |
 | `status == paid` | ✅ **Paid** (disabled) | Tooltip: "You've been paid for this submission" |
 | `verification_status == rejected` | ❌ **Rejected** (disabled) | Show `rejection_reason` |
