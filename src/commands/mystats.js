@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { fetchClipperStats } = require("../api");
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const { getClipperStats } = require("../api");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,36 +10,39 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const email = interaction.options.getString("email").trim();
 
-    const email = interaction.options.getString("email");
-
+    let stats;
     try {
-      const stats = await fetchClipperStats(email);
-
-      const campaignList = (stats.campaigns || [])
-        .map((c) => `\u2022 ${c.name} (${c.submissions} subs)`)
-        .join("\n") || "None";
-
-      const embed = new EmbedBuilder()
-        .setTitle("Your Stats")
-        .setColor(0x2196f3)
-        .addFields(
-          { name: "Submissions", value: `${stats.total_submissions}`, inline: true },
-          { name: "Total Views", value: `${(stats.total_views || 0).toLocaleString()}`, inline: true },
-          { name: "Total Likes", value: `${(stats.total_likes || 0).toLocaleString()}`, inline: true },
-          { name: "Total Comments", value: `${(stats.total_comments || 0).toLocaleString()}`, inline: true },
-          { name: "Earnings", value: `$${(stats.total_earnings || 0).toFixed(2)}`, inline: true },
-          { name: "Platforms", value: stats.platforms.join(", ") || "None", inline: true },
-          { name: "Campaigns", value: campaignList, inline: false }
-        )
-        .setFooter({ text: email })
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [embed] });
+      stats = await getClipperStats(email);
     } catch (err) {
-      console.error("Fetch stats error:", err);
-      await interaction.editReply("No stats found for that email, or something went wrong.");
+      console.error("getClipperStats error:", err);
+      return interaction.editReply("No stats found for that email, or something went wrong.");
     }
+
+    const embed = new EmbedBuilder()
+      .setTitle("📈 Your Stats")
+      .setColor(0x2196f3)
+      .addFields(
+        { name: "Submissions", value: `${stats.total_submissions || 0}`, inline: true },
+        { name: "Views", value: `${(stats.total_views || 0).toLocaleString()}`, inline: true },
+        { name: "Likes", value: `${(stats.total_likes || 0).toLocaleString()}`, inline: true },
+        { name: "Comments", value: `${(stats.total_comments || 0).toLocaleString()}`, inline: true },
+        { name: "Earnings", value: `$${(stats.total_earnings || 0).toFixed(2)}`, inline: true },
+        {
+          name: "Platforms",
+          value: (stats.platforms || []).join(", ") || "None",
+          inline: true,
+        },
+        {
+          name: "Campaigns",
+          value: (stats.campaigns || []).map((c) => `#${c}`).join(", ") || "None",
+        }
+      )
+      .setFooter({ text: email })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
   },
 };

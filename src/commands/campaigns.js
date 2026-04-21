@@ -5,26 +5,25 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-const { fetchCampaigns } = require("../api");
+const { listCampaigns } = require("../api");
 
-function buildProgressBar(used, total, length = 10) {
+function progressBar(used, total, length = 10) {
+  if (!total) return "";
   const ratio = Math.min(used / total, 1);
   const filled = Math.round(ratio * length);
   const empty = length - filled;
-  return "\u2588".repeat(filled) + "\u2591".repeat(empty) + ` ${Math.round(ratio * 100)}%`;
+  return "█".repeat(filled) + "░".repeat(empty) + ` ${Math.round(ratio * 100)}%`;
 }
 
-function platformEmojis(platforms) {
+function platformLine(platforms) {
   const icons = {
-    instagram: "\uD83D\uDCF7 Instagram",
-    tiktok: "\uD83C\uDFB5 TikTok",
-    youtube: "\u25B6\uFE0F YouTube",
-    twitter: "\uD83D\uDC26 Twitter",
+    instagram: "📷 Instagram",
+    tiktok: "🎵 TikTok",
+    youtube: "▶️ YouTube",
+    twitter: "🐦 Twitter",
   };
   const list = Array.isArray(platforms) ? platforms : platforms.split(",");
-  return list
-    .map((p) => icons[p.trim()] || p.trim())
-    .join("  \u2022  ");
+  return list.map((p) => icons[p.trim()] || p.trim()).join("  •  ");
 }
 
 module.exports = {
@@ -37,9 +36,9 @@ module.exports = {
 
     let campaigns;
     try {
-      campaigns = await fetchCampaigns();
+      campaigns = await listCampaigns();
     } catch (err) {
-      console.error("Failed to fetch campaigns:", err);
+      console.error("listCampaigns error:", err);
       return interaction.editReply("Failed to load campaigns. Try again later.");
     }
 
@@ -47,72 +46,60 @@ module.exports = {
       return interaction.editReply("No open campaigns right now. Check back soon!");
     }
 
-    for (const campaign of campaigns) {
-      const hasBudget = campaign.budget_total != null && campaign.budget_total > 0;
-      const budgetRemaining = hasBudget ? campaign.budget_total - campaign.budget_used : null;
+    for (const c of campaigns) {
+      const hasBudget = c.budget_total != null && c.budget_total > 0;
+      const remaining = hasBudget ? c.budget_total - c.budget_used : null;
 
       const embed = new EmbedBuilder()
-        .setTitle(`\uD83C\uDFAC  ${campaign.name}`)
+        .setTitle(`🎬  ${c.name}`)
         .setDescription(
-          `${campaign.description || "No description"}\n` +
-          `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`
+          `${c.description || "No description"}\n──────────────────────────────`
         )
         .setColor(0x7c3aed)
         .addFields(
           {
-            name: "\uD83D\uDCB0  Payout",
-            value: [
-              `**CPM:** \`$${(campaign.cpm_rate || 0).toFixed(2)}\` per 1k views`,
-              `**Max Payout:** \`$${(campaign.max_payout || 0).toFixed(2)}\``,
-            ].join("\n"),
+            name: "💰 Payout",
+            value:
+              `**CPM:** \`$${(c.cpm_rate || 0).toFixed(2)}\` per 1k views\n` +
+              `**Max Payout:** \`$${(c.max_payout || 0).toFixed(2)}\``,
             inline: true,
           },
           {
-            name: "\uD83D\uDCCA  Budget",
+            name: "📊 Budget",
             value: hasBudget
-              ? [
-                  `**Total:** \`$${campaign.budget_total.toLocaleString()}\``,
-                  `**Remaining:** \`$${budgetRemaining.toLocaleString()}\``,
-                  buildProgressBar(campaign.budget_used, campaign.budget_total),
-                ].join("\n")
+              ? `**Total:** \`$${c.budget_total.toLocaleString()}\`\n` +
+                `**Remaining:** \`$${remaining.toLocaleString()}\`\n` +
+                progressBar(c.budget_used, c.budget_total)
               : "No budget cap",
             inline: true,
           },
-          { name: "\u200B", value: "\u200B", inline: false },
-          {
-            name: "\uD83C\uDF10  Accepted Platforms",
-            value: platformEmojis(campaign.accepted_platforms),
-            inline: false,
-          }
+          { name: "​", value: "​", inline: false },
+          { name: "🌐 Accepted Platforms", value: platformLine(c.accepted_platforms) }
         )
-        .setFooter({
-          text: `Campaign #${campaign.id}  \u2022  Posted`,
-        })
-        .setTimestamp(new Date(campaign.created_at));
+        .setFooter({ text: `Campaign #${c.id}` })
+        .setTimestamp(new Date(c.created_at));
 
-      if (campaign.thumbnail_url) {
-        embed.setImage(campaign.thumbnail_url);
-      }
+      if (c.thumbnail_url) embed.setImage(c.thumbnail_url);
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`enter_campaign_${campaign.id}`)
-          .setLabel("\uD83D\uDE80 Enter Campaign")
-          .setStyle(ButtonStyle.Success),
+          .setCustomId(`enter_campaign_${c.id}`)
+          .setLabel("🚀 Enter Campaign")
+          .setStyle(ButtonStyle.Success)
       );
 
-      if (campaign.requirements_url) {
+      if (c.requirements_url) {
         row.addComponents(
           new ButtonBuilder()
-            .setLabel("\uD83D\uDCCB Requirements")
+            .setLabel("📋 Requirements")
             .setStyle(ButtonStyle.Link)
-            .setURL(campaign.requirements_url),
+            .setURL(c.requirements_url)
         );
       }
 
       await interaction.channel.send({ embeds: [embed], components: [row] });
     }
 
-    await interaction.editReply(`\u2728 Found **${campaigns.length}** open campaign(s) \u2014 check them out above!`);
+    await interaction.editReply(`✨ Found **${campaigns.length}** open campaign(s) above.`);
   },
 };

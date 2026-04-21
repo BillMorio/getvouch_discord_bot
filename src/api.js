@@ -1,82 +1,72 @@
-const BASE_URL = process.env.API_BASE_URL;
-const TOKEN = process.env.API_TOKEN;
+const BASE_URL =
+  process.env.LUMINA_API_URL ||
+  process.env.API_BASE_URL ||
+  "https://lumina-clippers-api.onrender.com";
 
-const headers = {
-  Authorization: `Bearer ${TOKEN}`,
-  "Content-Type": "application/json",
-};
-
-async function fetchCampaigns() {
-  const res = await fetch(`${BASE_URL}/campaigns`, { headers });
-  if (!res.ok) throw new Error(`Failed to fetch campaigns: ${res.status}`);
-  const data = await res.json();
-  return data.campaigns || data;
+async function listCampaigns() {
+  const r = await fetch(`${BASE_URL}/api/discord/campaigns`);
+  if (!r.ok) throw new Error(`listCampaigns ${r.status}`);
+  return r.json();
 }
 
-async function fetchCampaign(campaignId) {
-  const res = await fetch(`${BASE_URL}/campaigns/${campaignId}`, { headers });
-  if (!res.ok) throw new Error(`Failed to fetch campaign ${campaignId}: ${res.status}`);
-  return res.json();
+async function getCampaign(id) {
+  const r = await fetch(`${BASE_URL}/api/discord/campaigns/${id}`);
+  if (!r.ok) throw new Error(`getCampaign ${r.status}`);
+  return r.json();
 }
 
-async function submitEntry({ campaign_id, clipper_email, post_url }) {
-  const res = await fetch(`${BASE_URL}/submissions`, {
+async function submitClip({ campaign_id, clipper_email, post_url, discord_user_id }) {
+  const r = await fetch(`${BASE_URL}/api/discord/submit`, {
     method: "POST",
-    headers,
-    body: JSON.stringify({ campaign_id, clipper_email, post_url }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ campaign_id, clipper_email, post_url, discord_user_id }),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    return { status: "error", detail: data.detail || data.message || `Error ${res.status}` };
-  }
+  return r.json();
+}
+
+async function getClipperStats(email) {
+  const r = await fetch(`${BASE_URL}/api/discord/clipper/${encodeURIComponent(email)}/stats`);
+  if (!r.ok) throw new Error(`getClipperStats ${r.status}`);
+  return r.json();
+}
+
+async function getSubmissionStatus(id) {
+  const r = await fetch(`${BASE_URL}/api/discord/submission/${id}`);
+  if (!r.ok) throw new Error(`getSubmissionStatus ${r.status}`);
+  return r.json();
+}
+
+async function getVerificationStatus(submissionId, token) {
+  const url = `${BASE_URL}/api/submissions/${submissionId}/verification-status?token=${encodeURIComponent(token)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`getVerificationStatus ${r.status}`);
+  return r.json();
+}
+
+async function uploadVerification(submissionId, submissionToken, fileBuffer, filename, mime) {
+  const form = new FormData();
+  form.append("video", new Blob([fileBuffer], { type: mime }), filename);
+  const url = `${BASE_URL}/api/submissions/${submissionId}/upload-verification?token=${encodeURIComponent(submissionToken)}`;
+  const r = await fetch(url, { method: "POST", body: form });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`uploadVerification ${r.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
-async function submitBulk({ campaign_id, clipper_email, post_urls }) {
-  const res = await fetch(`${BASE_URL}/submissions/bulk`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ campaign_id, clipper_email, post_urls }),
-  });
-  if (!res.ok) throw new Error(`Bulk submit failed: ${res.status}`);
-  return res.json();
-}
-
-async function fetchSubmission(submissionId) {
-  const res = await fetch(`${BASE_URL}/submissions/${submissionId}`, { headers });
-  if (!res.ok) throw new Error(`Failed to fetch submission ${submissionId}: ${res.status}`);
-  return res.json();
-}
-
-async function patchVerification(submissionId, { verification_status, verification_request_id, outputs }) {
-  const res = await fetch(`${BASE_URL}/submissions/${submissionId}/verification`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ verification_status, verification_request_id, outputs }),
-  });
-  if (!res.ok) throw new Error(`Failed to patch verification: ${res.status}`);
-  return res.json();
-}
-
-async function fetchClipperSubmissions(email) {
-  const res = await fetch(`${BASE_URL}/clippers/${encodeURIComponent(email)}/submissions`, { headers });
-  if (!res.ok) throw new Error(`Failed to fetch submissions for ${email}: ${res.status}`);
-  return res.json();
-}
-
-async function fetchClipperStats(email) {
-  const res = await fetch(`${BASE_URL}/clippers/${encodeURIComponent(email)}/stats`, { headers });
-  if (!res.ok) throw new Error(`Failed to fetch stats for ${email}: ${res.status}`);
-  return res.json();
+async function listPublicCampaigns() {
+  const r = await fetch(`${BASE_URL}/api/public/campaigns`);
+  if (!r.ok) throw new Error(`listPublicCampaigns ${r.status}`);
+  return r.json();
 }
 
 module.exports = {
-  fetchCampaigns,
-  fetchCampaign,
-  submitEntry,
-  submitBulk,
-  fetchSubmission,
-  patchVerification,
-  fetchClipperSubmissions,
-  fetchClipperStats,
+  BASE_URL,
+  listCampaigns,
+  getCampaign,
+  submitClip,
+  getClipperStats,
+  getSubmissionStatus,
+  getVerificationStatus,
+  uploadVerification,
+  listPublicCampaigns,
 };
