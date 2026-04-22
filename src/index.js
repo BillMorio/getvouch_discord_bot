@@ -1,14 +1,13 @@
 require("dotenv").config();
 
-const { Client, GatewayIntentBits, Collection, MessageFlags, Partials } = require("discord.js");
+const { Client, GatewayIntentBits, Collection, MessageFlags } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
 
 // --- Discord Bot Setup ---
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
-  partials: [Partials.Channel],
+  intents: [GatewayIntentBits.Guilds],
   rest: { timeout: 30_000 },
 });
 
@@ -27,15 +26,6 @@ for (const file of fs.readdirSync(commandsPath).filter((f) => f.endsWith(".js"))
 
 const campaignEntry = require("./events/campaignEntry");
 const submissionActions = require("./events/submissionActions");
-const { handleDmMessage } = require("./uploadFlow");
-
-client.on("messageCreate", async (message) => {
-  try {
-    await handleDmMessage(message);
-  } catch (err) {
-    console.error("messageCreate error:", err);
-  }
-});
 
 client.on("interactionCreate", async (interaction) => {
   try {

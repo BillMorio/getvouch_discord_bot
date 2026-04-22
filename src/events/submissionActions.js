@@ -15,14 +15,37 @@ const {
   claimPayment,
 } = require("../api");
 const { buildSubmissionCard } = require("../lib/submissionCard");
-const { startDmUpload } = require("../uploadFlow");
+
+const UPLOAD_PAGE_BASE = "https://portal.luminaclippers.com/upload";
 
 // --- Button handlers -------------------------------------------------------
 
-// upload_proof_<id> — opens a DM to the clipper and waits for a video reply
+// upload_proof_<id> — replies ephemerally with a web upload link
 async function handleUploadProofButton(interaction) {
   const submissionId = interaction.customId.replace("upload_proof_", "");
-  await startDmUpload(interaction, submissionId);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  let sub;
+  try {
+    sub = await getSubmissionStatus(submissionId);
+  } catch (err) {
+    console.error("getSubmissionStatus error:", err);
+    return interaction.editReply("Couldn't load this submission. Try again.");
+  }
+
+  const token = sub.submission_token;
+  if (!token) {
+    return interaction.editReply(
+      "Upload link isn't available for this submission yet. This usually means the Lumina API hasn't been updated to expose `submission_token` on submission reads — ping the platform team."
+    );
+  }
+
+  const url = `${UPLOAD_PAGE_BASE}/${token}`;
+  await interaction.editReply(
+    `📹 **Upload your proof video here:**\n${url}\n\n` +
+      `*Max 100 MB · MP4 / MOV / WEBM · Works on any device.*\n` +
+      `After you upload, come back and hit **💰 Claim Payment** on your submission card.`
+  );
 }
 
 // claim_payment_<id>

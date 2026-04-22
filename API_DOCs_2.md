@@ -353,10 +353,14 @@ When an admin runs `/post-campaign <id>` in a channel, the bot:
 - On error, bot replies ephemerally with the `detail` message
 
 ### 5.3 Verification video upload
-- User clicks **Upload Proof Video** (or runs `/upload-proof <submission_id>`)
-- Bot asks them to attach the video in the next message (or uploads directly from the button interaction)
-- Bot streams the file to `POST /api/submissions/{id}/upload-verification?token=…` as `multipart/form-data`
-- Confirms success ephemerally
+- User clicks **Upload Proof Video** on a submission card
+- Bot fetches the submission to read its `submission_token`
+- Bot replies ephemerally with `https://portal.luminaclippers.com/upload/{submission_token}`
+- Clipper opens the link, uploads the video on the web page (supports up to 100 MB)
+- Bot does **not** handle the file — the web portal POSTs directly to `/api/submissions/{id}/upload-verification?token=…`
+- Next time the bot re-fetches the submission (e.g. after another button click or `/mysubmissions`), `has_video` is `true` and the card flips to **Claim Payment**
+
+**Why web link instead of Discord attachment:** Discord caps non-Nitro attachments at 10 MB, which is too low for most proof videos. The portal page handles 100 MB, progress bars, mobile layout, and error states the bot would otherwise have to implement badly.
 
 ### 5.4 Profile command
 `/profile` or `/me` → calls `GET /api/discord/clipper/{email}/stats` → returns a stat embed.
