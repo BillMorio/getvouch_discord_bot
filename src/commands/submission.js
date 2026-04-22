@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { getSubmissionStatus } = require("../api");
 const { buildSubmissionCard } = require("../lib/submissionCard");
+const { requireChannel } = require("../lib/guards");
+const { CHANNELS } = require("../config");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,6 +13,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireChannel(interaction, CHANNELS.verification))) return;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const id = interaction.options.getInteger("id");
 

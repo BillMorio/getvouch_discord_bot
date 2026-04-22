@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getClipperStats } = require("../api");
+const { requireChannel } = require("../lib/guards");
+const { CHANNELS } = require("../config");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,6 +12,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireChannel(interaction, CHANNELS.mySettings))) return;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const email = interaction.options.getString("email").trim();
 

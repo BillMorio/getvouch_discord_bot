@@ -6,6 +6,8 @@ const {
   ButtonStyle,
 } = require("discord.js");
 const { listCampaigns } = require("../api");
+const { requireChannel } = require("../lib/guards");
+const { CHANNELS } = require("../config");
 
 function progressBar(used, total, length = 10) {
   if (!total) return "";
@@ -32,6 +34,7 @@ module.exports = {
     .setDescription("Browse open campaigns"),
 
   async execute(interaction) {
+    if (!(await requireChannel(interaction, CHANNELS.liveCampaigns))) return;
     await interaction.deferReply();
 
     let campaigns;

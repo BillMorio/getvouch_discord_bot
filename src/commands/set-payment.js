@@ -8,6 +8,8 @@ const {
 } = require("discord.js");
 const { getPaymentMethod } = require("../api");
 const { buildCredentialModal } = require("../events/submissionActions");
+const { requireChannel } = require("../lib/guards");
+const { CHANNELS } = require("../config");
 
 const METHOD_LABEL = { paypal: "PayPal", whop: "Whop", solana: "Solana" };
 
@@ -31,6 +33,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireChannel(interaction, CHANNELS.mySettings))) return;
     const email = interaction.options.getString("email").trim();
     const method = interaction.options.getString("method");
 
