@@ -81,9 +81,12 @@ client.once("ready", () => {
   console.log(`Bot is online as ${client.user.tag}`);
 });
 
-// --- HTTP server (health check only for now) ---
+// --- HTTP server (health check + Lumina webhook receiver) ---
 const app = express();
 app.get("/health", (_req, res) => res.send("OK"));
+
+const { mountLuminaWebhook } = require("./webhooks/lumina");
+mountLuminaWebhook(app, client);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`HTTP server listening on port ${PORT}`));
