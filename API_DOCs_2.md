@@ -146,9 +146,13 @@ For follow-up "check status" commands AND for rendering state-driven action butt
   "clipper_email": "user@example.com",
   "campaign_id": 16,
   "discord_user_id": "123456789012345678",
-  "created_at": "2026-04-20T12:34:56"
+  "created_at": "2026-04-20T12:34:56",
+  "submission_token": "7f2d8c1a-4e5b-…",
+  "upload_url": "https://portal.luminaclippers.com/upload/7f2d8c1a-4e5b-…"
 }
 ```
+
+`upload_url` is the ready-to-use web upload page for this submission (the bot just hands it to the clipper). Empty string on legacy rows without a token.
 
 **Use for stateful buttons** (see §5.7):
 - `has_video == false` → show **Upload Video Proof**
@@ -309,7 +313,9 @@ For `/mysubmissions` — paginated list, newest first. Each row has the same sha
       "rejection_reason": "",
       "clipper_email": "clipper@example.com",
       "discord_user_id": "123456789012345678",
-      "created_at": "2026-04-19T14:22:11"
+      "created_at": "2026-04-19T14:22:11",
+      "submission_token": "7f2d8c1a-4e5b-…",
+      "upload_url": "https://portal.luminaclippers.com/upload/7f2d8c1a-4e5b-…"
     }
   ]
 }
@@ -354,9 +360,9 @@ When an admin runs `/post-campaign <id>` in a channel, the bot:
 
 ### 5.3 Verification video upload
 - User clicks **Upload Proof Video** on a submission card
-- Bot fetches the submission to read its `submission_token`
-- Bot replies ephemerally with `https://portal.luminaclippers.com/upload/{submission_token}`
-- Clipper opens the link, uploads the video on the web page (supports up to 100 MB)
+- Bot fetches the submission and reads `upload_url`
+- Bot replies ephemerally with a Discord Link button pointing at `upload_url`
+- Clipper taps the button, uploads the video on the web page (supports up to 100 MB)
 - Bot does **not** handle the file — the web portal POSTs directly to `/api/submissions/{id}/upload-verification?token=…`
 - Next time the bot re-fetches the submission (e.g. after another button click or `/mysubmissions`), `has_video` is `true` and the card flips to **Claim Payment**
 
