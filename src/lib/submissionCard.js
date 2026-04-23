@@ -21,7 +21,8 @@ const statusTheme = {
 
 /**
  * Decide which single primary action button to show based on submission state.
- * Returns { label, style, customId, disabled } or null if no button applies.
+ * Returns { label, style, customId?, url?, disabled? } or null if no button applies.
+ * A `url` field signals a Link-style button (no customId); `customId` is used otherwise.
  */
 function pickPrimaryAction(sub) {
   const { id, status, verification_status: vStatus, has_video } = sub;
@@ -36,7 +37,15 @@ function pickPrimaryAction(sub) {
     return { label: "⏳ Payment Pending", style: ButtonStyle.Secondary, customId: `noop_${id}`, disabled: true };
   }
   if (!has_video) {
-    return { label: "📹 Upload Video Proof to Claim Payment", style: ButtonStyle.Primary, customId: `upload_proof_${id}` };
+    if (sub.upload_url) {
+      return { label: "📹 Upload Video Proof to Claim Payment", url: sub.upload_url };
+    }
+    return {
+      label: "⚠️ Upload Unavailable — Contact Support",
+      style: ButtonStyle.Secondary,
+      customId: `noop_${id}`,
+      disabled: true,
+    };
   }
   // Any verification_status is fine once a proof video exists — admin verifies later.
   return { label: "💰 Claim Payment", style: ButtonStyle.Success, customId: `claim_payment_${id}` };
@@ -82,11 +91,13 @@ function buildSubmissionCard(sub) {
   const action = pickPrimaryAction(sub);
   const components = [];
   if (action) {
-    const button = new ButtonBuilder()
-      .setCustomId(action.customId)
-      .setLabel(action.label)
-      .setStyle(action.style);
-    if (action.disabled) button.setDisabled(true);
+    const button = new ButtonBuilder().setLabel(action.label);
+    if (action.url) {
+      button.setStyle(ButtonStyle.Link).setURL(action.url);
+    } else {
+      button.setStyle(action.style).setCustomId(action.customId);
+      if (action.disabled) button.setDisabled(true);
+    }
     components.push(new ActionRowBuilder().addComponents(button));
   }
 
