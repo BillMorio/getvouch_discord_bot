@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const { CHANNELS } = require("../config");
 const { buildCampaignCard } = require("../lib/campaignCard");
+const { syncLiveCampaignsFeed } = require("../services/liveCampaignsFeed");
 
 const FIVE_MINUTES_S = 5 * 60;
 const DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -71,17 +72,25 @@ function mountLuminaWebhook(app, client) {
     "campaign.created": async (data) => {
       const channelId = CHANNELS.newCampaigns;
       if (!channelId) {
-        console.warn("CHANNEL_NEW_CAMPAIGNS unset — dropping campaign.created");
-        return;
+        console.warn("CHANNEL_NEW_CAMPAIGNS unset — dropping campaign.created announcement");
+      } else {
+        if (!client.isReady()) {
+          throw new Error("Discord client not ready");
+        }
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !channel.isTextBased?.()) {
+          throw new Error(`Channel ${channelId} is not text-based`);
+        }
+        await channel.send(buildCampaignCard(data));
       }
-      if (!client.isReady()) {
-        throw new Error("Discord client not ready");
+
+      // Refresh the always-on #live-campaigns feed so the new card appears immediately.
+      // Errors here don't fail the webhook — the 5-min scheduled sync will catch up.
+      try {
+        await syncLiveCampaignsFeed(client);
+      } catch (err) {
+        console.error("campaign.created: live feed sync failed (will self-heal):", err);
       }
-      const channel = await client.channels.fetch(channelId);
-      if (!channel || !channel.isTextBased?.()) {
-        throw new Error(`Channel ${channelId} is not text-based`);
-      }
-      await channel.send(buildCampaignCard(data));
     },
   };
 

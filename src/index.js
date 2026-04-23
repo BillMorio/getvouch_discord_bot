@@ -77,8 +77,11 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+const { startLiveCampaignsFeed } = require("./services/liveCampaignsFeed");
+
 client.once("ready", () => {
   console.log(`Bot is online as ${client.user.tag}`);
+  startLiveCampaignsFeed(client);
 });
 
 // --- HTTP server (health check + Lumina webhook receiver) ---
