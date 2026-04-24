@@ -3,10 +3,13 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
   MessageFlags,
 } = require("discord.js");
-const { submitClip, getSubmissionStatus } = require("../api");
-const { buildSubmissionCard } = require("../lib/submissionCard");
+const { submitClip } = require("../api");
+const { CHANNELS } = require("../config");
 
 // "Enter Campaign" button → modal with URL + email
 async function handleButton(interaction) {
@@ -68,27 +71,35 @@ async function handleModalSubmit(interaction) {
     return interaction.editReply(`❌ Submission failed: ${result.detail || "Unknown error"}`);
   }
 
-  // Fetch full submission state so we can render the stateful card
-  let submission;
-  try {
-    submission = await getSubmissionStatus(result.submission_id);
-  } catch (err) {
-    // Fallback: render a minimal card from what we have
-    submission = {
-      id: result.submission_id,
-      post_url: postUrl,
-      platform: result.platform || "unknown",
-      status: "submitted",
-      verification_status: "pending",
-      has_video: false,
-      clipper_email: clipperEmail,
-      campaign_id: campaignId,
-      created_at: new Date().toISOString(),
-    };
+  const verifyChannelId = CHANNELS.verification;
+  const verifyMention = verifyChannelId ? `<#${verifyChannelId}>` : "the verification channel";
+
+  const embed = new EmbedBuilder()
+    .setTitle("✅ Submission Received")
+    .setColor(0x00c853)
+    .setDescription(
+      `Your entry for **campaign #${campaignId}** is in — we'll fetch your stats shortly.\n` +
+        `🔗 ${postUrl}\n\n` +
+        `**Next step**\n` +
+        `Head to ${verifyMention} and run \`/mysubmissions\` to track progress, upload your proof video, and claim payment once verified.`
+    )
+    .setFooter({ text: `Submission #${result.submission_id} · ${clipperEmail}` })
+    .setTimestamp();
+
+  const components = [];
+  if (interaction.guildId && verifyChannelId) {
+    const channelUrl = `https://discord.com/channels/${interaction.guildId}/${verifyChannelId}`;
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel("→ Go to verify-to-get-paid")
+          .setStyle(ButtonStyle.Link)
+          .setURL(channelUrl)
+      )
+    );
   }
 
-  const card = buildSubmissionCard(submission);
-  await interaction.editReply(card);
+  await interaction.editReply({ embeds: [embed], components });
   return true;
 }
 
