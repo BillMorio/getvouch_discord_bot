@@ -7,7 +7,7 @@ const express = require("express");
 
 // --- Discord Bot Setup ---
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
   rest: { timeout: 30_000 },
 });
 
@@ -78,10 +78,12 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 const { startLiveCampaignsFeed } = require("./services/liveCampaignsFeed");
+const { startMessageGuard } = require("./services/messageGuard");
 
 client.once("ready", () => {
   console.log(`Bot is online as ${client.user.tag}`);
   startLiveCampaignsFeed(client);
+  startMessageGuard(client);
 });
 
 // --- HTTP server (health check + Lumina webhook receiver) ---
