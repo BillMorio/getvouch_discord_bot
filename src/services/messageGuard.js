@@ -3,13 +3,14 @@ const { CHANNELS } = require("../config");
 // Channels where members should only run slash commands and click buttons —
 // no free-form chat. Any non-bot, non-system message posted here is deleted
 // silently, keeping the channel clean while preserving slash-command access.
+//
+// Note: platform-tutorial is intentionally NOT in this list. It's a content
+// channel where admin-posted tutorials need to persist.
 const SLASH_ONLY_CHANNEL_IDS = new Set(
   [
     CHANNELS.liveCampaigns,
     CHANNELS.verification,
     CHANNELS.mySettings,
-    // platform-tutorial — not in env vars yet, hardcoded for now.
-    "1498645411806838877",
   ].filter(Boolean)
 );
 
