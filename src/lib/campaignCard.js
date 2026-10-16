@@ -59,12 +59,37 @@ function buildCampaignCard(c) {
 
   if (c.thumbnail_url) embed.setImage(c.thumbnail_url);
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`enter_campaign_${c.id}`)
-      .setLabel("🚀 Enter Campaign")
-      .setStyle(ButtonStyle.Success)
-  );
+  // Application-only campaigns: clippers apply through a form first; only
+  // approved clippers can submit (the Lumina API refuses everyone else, so the
+  // "Approved? Submit" button is safe to show to all).
+  const applicationOnly = Boolean(c.application_only) && Boolean(c.apply_url);
+  if (applicationOnly) {
+    embed.addFields({
+      name: "📝 Application only",
+      value: "Fill in the form to apply to this campaign. Once you're approved you can submit here.",
+    });
+  }
+
+  const row = new ActionRowBuilder();
+  if (applicationOnly) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setLabel("📝 Apply")
+        .setStyle(ButtonStyle.Link)
+        .setURL(c.apply_url),
+      new ButtonBuilder()
+        .setCustomId(`enter_campaign_${c.id}`)
+        .setLabel("✅ Approved? Submit")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  } else {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`enter_campaign_${c.id}`)
+        .setLabel("🚀 Enter Campaign")
+        .setStyle(ButtonStyle.Success)
+    );
+  }
 
   if (c.requirements_url) {
     row.addComponents(
