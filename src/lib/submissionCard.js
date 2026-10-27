@@ -4,6 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
+const { CHANNELS } = require("../config");
 
 const platformIcon = {
   instagram: "📷",
@@ -53,7 +54,15 @@ function pickPrimaryAction(sub) {
 
 function buildSubmissionCard(sub) {
   const pIcon = platformIcon[sub.platform] || "🌐";
-  const theme = statusTheme[sub.status] || { color: 0x9e9e9e, icon: "❔", label: sub.status || "Unknown" };
+
+  // A submission can be rejected at verification while `status` still reads
+  // "submitted"; the card must not headline "Submitted" over a rejection notice.
+  const isRejected =
+    sub.status === "rejected" || sub.verification_status === "rejected";
+
+  const theme = isRejected
+    ? statusTheme.rejected
+    : statusTheme[sub.status] || { color: 0x9e9e9e, icon: "❔", label: sub.status || "Unknown" };
 
   const stats =
     (sub.views || 0) > 0
@@ -65,12 +74,26 @@ function buildSubmissionCard(sub) {
       ? `💵 Est: \`$${sub.est_earnings.toFixed(2)}\``
       : "";
 
-  const verif = sub.verification_status
-    ? `🔐 Verification: \`${sub.verification_status}\``
-    : "";
+  // Once we're spelling the rejection out in full below, the raw
+  // "Verification: rejected" line is just noise.
+  const verif =
+    sub.verification_status && !isRejected
+      ? `🔐 Verification: \`${sub.verification_status}\``
+      : "";
 
-  const reject = sub.rejection_reason
-    ? `\n⚠️ **Reason:** ${sub.rejection_reason}`
+  // A bare "Rejected" badge sent clippers straight to a support ticket asking
+  // why, so state the reason in the card and point at the appeal route. The
+  // reason is quoted verbatim — admins write them in caps ("INORGANIC
+  // IMPRESSIONS", "BOTS") and that shorthand is what support recognises.
+  const appealRoute = CHANNELS.supportTickets
+    ? `<#${CHANNELS.supportTickets}>`
+    : "a support ticket";
+  const reject = isRejected
+    ? "\n" +
+      (sub.rejection_reason
+        ? `❌ **Your video was rejected for "${sub.rejection_reason}"**`
+        : `❌ **Your video was rejected.** No reason was recorded.`) +
+      `\nYou can open ${appealRoute} if you think otherwise.`
     : "";
 
   const embed = new EmbedBuilder()

@@ -7,6 +7,9 @@ const CHANNELS = {
   newCampaigns: process.env.CHANNEL_NEW_CAMPAIGNS || "",
   verification: process.env.CHANNEL_VERIFICATION || "",
   mySettings: process.env.CHANNEL_MY_SETTINGS || "",
+  // Where clippers appeal a rejection. Unset = the card says "a support ticket"
+  // in plain text instead of linking the channel.
+  supportTickets: process.env.CHANNEL_SUPPORT_TICKETS || "",
 };
 
 module.exports = { CHANNELS };
