@@ -12,4 +12,11 @@ const CHANNELS = {
   supportTickets: process.env.CHANNEL_SUPPORT_TICKETS || "",
 };
 
-module.exports = { CHANNELS };
+// Kill switch for wallet/payment-method changes through the bot.
+// Defaults to BLOCKED: the /api/discord/* endpoints accept a free-text email
+// with no proof of ownership, so any caller could redirect another clipper's
+// payouts. Only set this to "true" once the API enforces that discord_user_id
+// matches the clipper who owns the email.
+const ALLOW_WALLET_CHANGES = process.env.ALLOW_BOT_WALLET_CHANGES === "true";
+
+module.exports = { CHANNELS, ALLOW_WALLET_CHANGES };

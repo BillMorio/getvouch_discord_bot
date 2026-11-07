@@ -9,7 +9,8 @@ const {
 const { getPaymentMethod } = require("../api");
 const { buildCredentialModal } = require("../events/submissionActions");
 const { requireChannel } = require("../lib/guards");
-const { CHANNELS } = require("../config");
+const { CHANNELS, ALLOW_WALLET_CHANGES } = require("../config");
+const { refuseWalletChange } = require("../events/submissionActions");
 
 const METHOD_LABEL = { paypal: "PayPal", whop: "Whop", solana: "Solana" };
 
@@ -33,6 +34,10 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    // SECURITY: `email` is free text and the API never checks that the caller
+    // owns it, so this command could set ANY clipper's wallet. Closed until the
+    // API binds discord_user_id to the email.
+    if (!ALLOW_WALLET_CHANGES) return refuseWalletChange(interaction);
     if (!(await requireChannel(interaction, CHANNELS.mySettings))) return;
     const email = interaction.options.getString("email").trim();
     const method = interaction.options.getString("method");

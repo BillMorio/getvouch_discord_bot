@@ -15,6 +15,30 @@ const {
   claimPayment,
 } = require("../api");
 const { buildSubmissionCard } = require("../lib/submissionCard");
+const { ALLOW_WALLET_CHANGES, CHANNELS } = require("../config");
+
+// SECURITY: every payment-method path below writes a wallet for an email the
+// caller simply supplies — the API performs no ownership check, so anyone can
+// redirect anyone's payouts. Until the API enforces that discord_user_id owns
+// the email, these paths stay closed. See ALLOW_BOT_WALLET_CHANGES in config.
+async function refuseWalletChange(interaction) {
+  const where = CHANNELS.supportTickets ? `<#${CHANNELS.supportTickets}>` : "a support ticket";
+  const payload = {
+    content: [
+      "\u{1F512} **Payment details cannot be changed through Discord right now.**",
+      "We have temporarily disabled this while we strengthen how payment changes are verified.",
+      `To update your payout details, open ${where} and a member of the team will verify you directly.`,
+      "",
+      "*Your existing payouts are unaffected.*",
+    ].join("\n"),
+    flags: MessageFlags.Ephemeral,
+  };
+  if (interaction.replied || interaction.deferred) {
+    await interaction.followUp(payload).catch(() => {});
+  } else {
+    await interaction.reply(payload).catch(() => {});
+  }
+}
 
 // --- Button handlers -------------------------------------------------------
 
@@ -149,6 +173,7 @@ async function doClaim(interaction, submissionId, email, editOriginal = false) {
 
 // set_method_<method>_<id>  — opens the credential modal
 async function handleSetMethodButton(interaction) {
+  if (!ALLOW_WALLET_CHANGES) return refuseWalletChange(interaction);
   const match = interaction.customId.match(/^set_method_(paypal|whop|solana)_(.+)$/);
   if (!match) return;
   const method = match[1];
@@ -183,6 +208,7 @@ async function handleSetMethodButton(interaction) {
 
 // set_method_modal_<method>_<id>  — saves the method then retries claim
 async function handleSetMethodModal(interaction) {
+  if (!ALLOW_WALLET_CHANGES) return refuseWalletChange(interaction);
   const match = interaction.customId.match(/^set_method_modal_(paypal|whop|solana)_(.+)$/);
   if (!match) return;
   const method = match[1];
@@ -249,6 +275,7 @@ function buildCredentialModal(customId, method) {
 
 // set_method_only_<method>_<email>  — opens credential modal (no claim follow-up)
 async function handleSetMethodOnlyButton(interaction) {
+  if (!ALLOW_WALLET_CHANGES) return refuseWalletChange(interaction);
   const match = interaction.customId.match(/^set_method_only_(paypal|whop|solana)_(.+)$/);
   if (!match) return;
   const [, method, email] = match;
@@ -259,6 +286,7 @@ async function handleSetMethodOnlyButton(interaction) {
 
 // set_method_only_modal_<method>_<email>  — saves then confirms, no claim attempt
 async function handleSetMethodOnlyModal(interaction) {
+  if (!ALLOW_WALLET_CHANGES) return refuseWalletChange(interaction);
   const match = interaction.customId.match(/^set_method_only_modal_(paypal|whop|solana)_(.+)$/);
   if (!match) return;
   const [, method, email] = match;
@@ -309,4 +337,4 @@ async function handleModalSubmit(interaction) {
   return false;
 }
 
-module.exports = { handleButton, handleModalSubmit, buildCredentialModal };
+module.exports = { handleButton, handleModalSubmit, buildCredentialModal, refuseWalletChange };
